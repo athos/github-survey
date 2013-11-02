@@ -1,5 +1,7 @@
 (ns github-survey.core
-  (require [tentacles.core :as github]))
+  (require [tentacles.core :as github]
+           [clj-http.client :as http])
+  (import [java.io File]))
 
 (def basic-auth-credential "username:password")
 
@@ -21,3 +23,20 @@
                 :let [filename (str dest "/" (:name repo) "_" (hash repo))]]
           (spit filename repo))
         (Thread/sleep 10000)))))
+
+(defn download-project-files [src dst & {:keys [resume-from]}]
+  (doseq [filename (drop-while (if resume-from
+                                 #(not= resume-from %)
+                                 (constantly false))
+                               (.list (File. src)))
+          :let [repo (load-file (str src "/" filename))]]
+    (println "downloading project.clj for" (:name repo) "...")
+    (let [url (str "https://raw.github.com/" (:full_name repo) "/master/project.clj")
+          res (http/get url {:throw-exceptions false})]
+      (case (:status res)
+        200 (spit (str dst "/" filename) (:body res))
+        404 nil
+        (let [msg (str "received status code " (:status res)
+                       " when requesting project.clj for " (:full_name repo))]
+          (throw (RuntimeException. msg))))
+      (Thread/sleep 10000))))
