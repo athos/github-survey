@@ -53,18 +53,20 @@
     (f (.list (File. dir)))))
 
 (defn dependency-stats [dir]
-  (letfn [; convert [[lib1 ver1] [lib2 ver2] ...] to #{lib1 lib2 ...}
-          (deps-vec->set [v]
-            (try
-              (set (map first v))
-              (catch Exception e)))
-          (extract-deps [def]
-            (let [m (apply assoc {} (nthnext def 3))
-                  deps (deps-vec->set (:dependencies m))
-                  profile-deps (set (for [profile (:profiles m)
-                                          deps (deps-vec->set (:dependencies profile))]
-                                      deps))]
-              (-> #{} (into deps) (into profile-deps))))]
+  (letfn
+     [; convert [[lib1 ver1] [lib2 ver2] ...] to #{lib1 lib2 ...}
+      (deps-vec->set [v]
+        (try
+          (set (map first v))
+          (catch Exception e
+            #{})))
+      (extract-deps [def]
+        (let [m (apply assoc {} (nthnext def 3))
+              deps (deps-vec->set (:dependencies m))
+              profile-deps (set (for [profile (:profiles m)
+                                      deps (deps-vec->set (:dependencies profile))]
+                                  deps))]
+          (into deps profile-deps)))]
     (-> (for [def (project-definitions dir)
               :when (and (odd? (count def))
                          (> (count def) 3)
