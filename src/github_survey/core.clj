@@ -40,3 +40,35 @@
                        " when requesting project.clj for " (:full_name repo))]
           (throw (RuntimeException. msg))))
       (Thread/sleep 10000))))
+
+(defn project-definitions [dir]
+  (let [f (fn f [[file & files]]
+            (lazy-seq
+              (when-not (nil? file)
+                (if-let [def (try
+                               (read-string (slurp (str dir "/" file)))
+                               (catch Exception e))]
+                  (cons def (f files))
+                  (f files)))))]
+    (f (.list (File. dir)))))
+
+(defn dependency-stats [dir]
+  (letfn [; convert [[lib1 ver1] [lib2 ver2] ...] to #{lib1 lib2 ...}
+          (deps-vec->set [v]
+            (try
+              (set (map first v))
+              (catch Exception e)))
+          (extract-deps [def]
+            (let [m (apply assoc {} (nthnext def 3))
+                  deps (deps-vec->set (:dependencies m))
+                  profile-deps (set (for [profile (:profiles m)
+                                          deps (deps-vec->set (:dependencies profile))]
+                                      deps))]
+              (-> #{} (into deps) (into profile-deps))))]
+    (-> (for [def (project-definitions dir)
+              :when (and (odd? (count def))
+                         (> (count def) 3)
+                         (= (first def) 'defproject))
+              dep (extract-deps def)]
+          dep)
+        frequencies)))
